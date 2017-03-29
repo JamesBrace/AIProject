@@ -70,11 +70,11 @@ public class MyTools {
 
         double distribution_factor = evens - odds;
 
-        return 2*score_factor + 1.2*pit_factor + 1.5 * distribution_factor;
+        return 1 * score_factor + 0 * pit_factor + 0 * distribution_factor;
 
     }
 
-    static boolean contains(final int[] array, final int key) {
+    private static boolean contains(final int[] array, final int key) {
         return Arrays.asList(array).contains(key);
     }
 

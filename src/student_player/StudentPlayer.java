@@ -1,10 +1,10 @@
 package student_player;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.concurrent.TimeUnit;
 
-import boardgame.Board;
-import boardgame.Player;
 import bohnenspiel.BohnenspielBoardState;
 import bohnenspiel.BohnenspielMove;
 import bohnenspiel.BohnenspielPlayer;
@@ -13,50 +13,58 @@ import student_player.mytools.MyTools;
 /** A Hus player submitted by a student. */
 public class StudentPlayer extends BohnenspielPlayer {
 
+    private boolean isFirstMove = true;
+
+
     public StudentPlayer() { super("260654858"); }
 
     public BohnenspielMove chooseMove(BohnenspielBoardState board_state)
     {
-        // Get the contents of the pits so we can use it to make decisions.
-        int[][] pits = board_state.getPits();
+        long endtime;
+        long time = new Date().getTime();
 
-        // Use ``player_id`` and ``opponent_id`` to get my pits and opponent pits.
-        int[] my_pits = pits[player_id];
-        int[] op_pits = pits[opponent_id];
+//        first move... take advantage of it
+        if(isFirstMove){
+            isFirstMove = false;
+            endtime = time + 15000;
+        }
+        else{
+            endtime = time + 200;
+        }
 
-        // Use code stored in ``mytools`` package.
-//        MyTools.getSomething();
+        Decision decision= new Decision();
 
-        //inspect the outcome of each legal move
-        BohnenspielBoardState cloned_board_state = (BohnenspielBoardState) board_state.clone();
-        Decision decision = minMax(cloned_board_state, 0, 0, 6, this);
+        int maxDepth = 1;
+        while(new Date().getTime() < endtime){
+            decision = minMax(board_state, Integer.MIN_VALUE, Integer.MAX_VALUE, maxDepth, true);
+            maxDepth++;
+        }
+
 
         // But since this is a placeholder algorithm, we won't act on that information.
         return decision.returnMove;
     }
 
-    protected Decision minMax(BohnenspielBoardState boardState, double alpha, double beta, int maxDepth, Player player) {
-        //TODO: Need to implement this based on timing and memory requirements
-//        if (!canContinue()) {
-//            return new Decision();
-//        }
+    private Decision minMax(BohnenspielBoardState boardState, double alpha, double beta, int maxDepth, boolean isMax) {
 
-        ArrayList<BohnenspielMove> moves = boardState.getLegalMoves();
+        double value;
 
-        //Need to iterate through all legal moves (with some trimming of course)
-        Iterator<BohnenspielMove> movesIterator = moves.iterator();
-
-        double value = 0;
-
-        //figure out which perspective you should be playing from (ie. you or opponent)
-        boolean isMax = (player.equals(this));
-
-        //we have reached the bottom of the tree or the game has already been won??
-        if (maxDepth == 0 || boardState.gameOver()) {
-
+        //we have reached our max depth so we need to return
+        if (maxDepth == 0) {
             value = MyTools.evaluateBoard(boardState, this);
             return new Decision(value);
         }
+
+        ArrayList<BohnenspielMove> moves = boardState.getLegalMoves();
+
+        //we have reached our max depth so we need to return
+        if (moves.size() == 0) {
+            value = MyTools.evaluateBoard(boardState, this);
+            return new Decision(value);
+        }
+
+        //Need to iterate through all legal moves (with some trimming of course)
+        Iterator<BohnenspielMove> movesIterator = moves.iterator();
 
         Decision returnMove;
         Decision bestMove = null;
@@ -68,11 +76,14 @@ public class StudentPlayer extends BohnenspielPlayer {
                 //grab the current move for analysis
                 BohnenspielMove currentMove = movesIterator.next();
 
+                //inspect the outcome of each legal move
+                BohnenspielBoardState cloned_board_state = (BohnenspielBoardState) boardState.clone();
+
                 //inspect the outcome of the move
-                boardState.move(currentMove);
+                if(!cloned_board_state.move(currentMove)) continue;
 
                 //recursive call to continue DFS from opponent's perspective
-                returnMove = minMax(boardState, alpha, beta, maxDepth - 1, null);
+                returnMove = minMax(cloned_board_state, alpha, beta, maxDepth - 1, false);
 
                 //TODO: Need to implement this
 //                cloned_board_state.undoLastMove();
@@ -91,15 +102,20 @@ public class StudentPlayer extends BohnenspielPlayer {
                     return bestMove; // pruning
                 }
             }
+
             return bestMove;
+
         } else {
             while (movesIterator.hasNext()) {
 
                 BohnenspielMove currentMove = movesIterator.next();
 
+                //inspect the outcome of each legal move
+                BohnenspielBoardState cloned_board_state = (BohnenspielBoardState) boardState.clone();
+
                 //inspect the outcome of the move
-                boardState.move(currentMove);
-                returnMove = minMax(boardState, alpha, beta, maxDepth - 1, this);
+                cloned_board_state.move(currentMove);
+                returnMove = minMax(cloned_board_state, alpha, beta, maxDepth - 1, true);
 
                 //TODO: Need to implement this
 //                boardState.undoLastMove();
