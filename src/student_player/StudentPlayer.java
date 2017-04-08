@@ -15,55 +15,47 @@ public class StudentPlayer extends BohnenspielPlayer {
 
     private boolean isFirstMove = true;
 
-
     public StudentPlayer() { super("260654858"); }
 
     public BohnenspielMove chooseMove(BohnenspielBoardState board_state)
     {
 
-        long endTime;
-        long time = new Date().getTime();
+        long endTime = (isFirstMove)? System.nanoTime() + 29_800_000_000L : System.nanoTime() + 600_000_000L;
 
-        //first move... take advantage of it
-        if(isFirstMove){
+        if(isFirstMove && player_id == 0){
             isFirstMove = false;
-            endTime = time + 20000;
-        }
-        else{
-            endTime = time + 500;
+            ArrayList<BohnenspielMove> moves = board_state.getLegalMoves();
+            return new BohnenspielMove(2);
         }
 
         final ExecutorService service = Executors.newSingleThreadExecutor();
 
-        final Decision currentBest = new Decision(Integer.MIN_VALUE);
+        Decision currentBest = new Decision(Integer.MIN_VALUE);
 
         Callable<BohnenspielMove> task = () -> {
 
-            int maxDepth = 8;
+            int maxDepth = 10;
             Decision decision= new Decision();
-
 
             while(maxDepth < 25){
                 decision = minMax(board_state, Integer.MIN_VALUE, Integer.MAX_VALUE, maxDepth, true);
 
-                if(decision.returnValue > currentBest.returnValue){
-                    currentBest.returnValue = decision.returnValue;
-                    currentBest.returnMove = decision.returnMove;
-                }
+                currentBest.returnValue = decision.returnValue;
+                currentBest.returnMove = decision.returnMove;
 
                 maxDepth++;
+
+                System.out.println(maxDepth);
             }
 
-            System.out.println("return move: " + decision.returnMove);
+
             return decision.returnMove;
         };
 
         try {
             final Future<BohnenspielMove> f = service.submit(task);
-
-           return f.get(endTime - new Date().getTime(), TimeUnit.MILLISECONDS);
+           return f.get(endTime - System.nanoTime(), TimeUnit.NANOSECONDS);
         } catch (final TimeoutException e) {
-            System.out.println("returning current best" + currentBest.returnMove);
             return currentBest.returnMove;
         } catch (final Exception e) {
             throw new RuntimeException(e);
@@ -122,6 +114,10 @@ public class StudentPlayer extends BohnenspielPlayer {
                 //recursive call to continue DFS from opponent's perspective
                 returnMove = minMax(cloned_board_state, alpha, beta, maxDepth - 1, false);
 
+                if(maxDepth == 15){
+                    System.out.println("return score: " + returnMove.returnValue);
+                }
+
                 if ((bestMove == null) || (bestMove.returnValue < returnMove.returnValue)) {
                     bestMove = returnMove;
                     bestMove.returnMove = currentMove;
@@ -129,10 +125,9 @@ public class StudentPlayer extends BohnenspielPlayer {
                 if (returnMove.returnValue > alpha) {
                     alpha = returnMove.returnValue;
                     bestMove = returnMove;
+                    bestMove.returnMove = currentMove;
                 }
                 if (beta <= alpha) {
-                    bestMove.returnValue = beta;
-                    bestMove.returnMove = null;
                     return bestMove; // pruning
                 }
             }
@@ -151,9 +146,6 @@ public class StudentPlayer extends BohnenspielPlayer {
                 cloned_board_state.move(currentMove);
                 returnMove = minMax(cloned_board_state, alpha, beta, maxDepth - 1, true);
 
-                //TODO: Need to implement this
-                //                boardState.undoLastMove();
-
                 if ((bestMove == null) || (bestMove.returnValue > returnMove.returnValue)) {
                     bestMove = returnMove;
                     bestMove.returnMove = currentMove;
@@ -163,8 +155,8 @@ public class StudentPlayer extends BohnenspielPlayer {
                     bestMove = returnMove;
                 }
                 if (beta <= alpha) {
-                    bestMove.returnValue = alpha;
-                    bestMove.returnMove = null;
+//                    bestMove.returnValue = alpha;
+//                    bestMove.returnMove = null;
                     return bestMove; // pruning
                 }
             }
@@ -173,64 +165,25 @@ public class StudentPlayer extends BohnenspielPlayer {
     }
 
     private double evaluateBoard(BohnenspielBoardState boardState, BohnenspielPlayer me){
-//        int[] evenNums = {0, 2, 4, 6};
-//        int[] oddNums = {1, 3, 5};
-//
+
         // Get the contents of the pits so we can use it to make decisions.
         int[][] pits = boardState.getPits();
 
-//        int player = me.getColor();
-//        int opponent = (player + 1) % 2;
-//
         // Use ``player_id`` and ``opponent_id`` to get my pits and opponent pits.
         int[] my_pits = pits[player_id];
-//        int[] op_pits = pits[opponent];
 
         double my_score = boardState.getScore(player_id);
         double op_score = boardState.getScore(opponent_id);
 
         //ideally you want to make moves that increases your score at faster rate than your opponents
         double score_factor = my_score - op_score;
-//
+
         double my_seeds = 0;
         for(int i : my_pits){
             my_seeds += i;
         }
-//
-//        double op_seeds = 0;
-//        for(int i : op_pits){
-//            op_seeds += i;
-//        }
-//
-//        //game ends if opponent can't make move, take advantage of that
-//        if(op_seeds == 0 ) {
-//            if (my_score > op_score) {
-//                return Integer.MAX_VALUE;
-//            } else if (op_score > my_score) {
-//                return Integer.MIN_VALUE;
-//            }
-//        }
-//
-//        //ideally you want more seeds on your side
-//        double pit_factor = my_seeds - op_seeds;
-//
-//        //now you also want to be in a position where your opponent is left with pits with the maximum amount of
-//        //0's, 2's, 4's, or 6's
-//        int evens = 0;
-//        int odds = 0;
-//
-//        for(int i = 0; i < my_pits.length; i++){
-//            if(contains(evenNums, my_pits[i]) || contains(evenNums, op_pits[i])){
-//                evens++;
-//            }
-//            else if(contains(oddNums, my_pits[i]) || contains(oddNums, op_pits[i])){
-//                odds++;
-//            }
-//        }
-//
-//        double distribution_factor = evens - odds;
 
-        return 1 * score_factor + 1 * my_seeds; //+ 0 * pit_factor + 0 * distribution_factor;
+        return 1 * score_factor + 1 * my_seeds;
 
     }
 }
