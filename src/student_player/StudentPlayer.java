@@ -1,26 +1,48 @@
 package student_player;
 
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.Iterator;
 import java.util.concurrent.*;
 
 import bohnenspiel.BohnenspielBoardState;
 import bohnenspiel.BohnenspielMove;
 import bohnenspiel.BohnenspielPlayer;
-import student_player.mytools.MyTools;
+
 
 /** A Hus player submitted by a student. */
 public class StudentPlayer extends BohnenspielPlayer {
 
     private boolean isFirstMove = true;
+    private ArrayList<BohnenspielMove> bestMoves = new ArrayList<>();
+    private int turn = 1;
 
     public StudentPlayer() { super("260654858"); }
+
+
+    public class Decision {
+
+        double returnValue;
+        BohnenspielMove returnMove;
+
+        Decision() {
+            returnValue = 0;
+        }
+
+        Decision(double returnValue) {
+            this.returnValue = returnValue;
+        }
+
+        public Decision(double returnValue, BohnenspielMove returnMove) {
+            this.returnValue = returnValue;
+            this.returnMove = returnMove;
+        }
+
+    }
+
 
     public BohnenspielMove chooseMove(BohnenspielBoardState board_state)
     {
 
-        long endTime = (isFirstMove)? System.nanoTime() + 29_800_000_000L : System.nanoTime() + 600_000_000L;
+        long endTime = (isFirstMove)? System.nanoTime() + 29_000_000_000L : System.nanoTime() + 600_000_000L;
 
         if(isFirstMove && player_id == 0){
             isFirstMove = false;
@@ -28,13 +50,16 @@ public class StudentPlayer extends BohnenspielPlayer {
             return new BohnenspielMove(2);
         }
 
+        isFirstMove = false;
+
         final ExecutorService service = Executors.newSingleThreadExecutor();
 
         Decision currentBest = new Decision(Integer.MIN_VALUE);
 
         Callable<BohnenspielMove> task = () -> {
 
-            int maxDepth = 10;
+            int maxDepth = (board_state.getTurnNumber() == 0)? 16 : 10;
+
             Decision decision= new Decision();
 
             while(maxDepth < 25){
@@ -43,12 +68,11 @@ public class StudentPlayer extends BohnenspielPlayer {
                 currentBest.returnValue = decision.returnValue;
                 currentBest.returnMove = decision.returnMove;
 
+                System.out.println(maxDepth);
                 maxDepth++;
 
-                System.out.println(maxDepth);
+
             }
-
-
             return decision.returnMove;
         };
 
@@ -56,6 +80,7 @@ public class StudentPlayer extends BohnenspielPlayer {
             final Future<BohnenspielMove> f = service.submit(task);
            return f.get(endTime - System.nanoTime(), TimeUnit.NANOSECONDS);
         } catch (final TimeoutException e) {
+            System.out.println(currentBest.returnMove);
             return currentBest.returnMove;
         } catch (final Exception e) {
             throw new RuntimeException(e);
@@ -64,7 +89,7 @@ public class StudentPlayer extends BohnenspielPlayer {
         }
     }
 
-    public Decision minMax(BohnenspielBoardState boardState, double alpha, double beta, int maxDepth, boolean isMax) {
+    private Decision minMax(BohnenspielBoardState boardState, double alpha, double beta, int maxDepth, boolean isMax) {
 
         double value;
 
@@ -76,29 +101,23 @@ public class StudentPlayer extends BohnenspielPlayer {
 
         ArrayList<BohnenspielMove> moves = boardState.getLegalMoves();
 
-        //we have reached our max depth so we need to return
+        //if there are no more legal moves
         if (moves.size() == 0) {
             value = evaluateBoard(boardState, this);
             return new Decision(value);
         }
-
-        //Need to iterate through all legal moves (with some trimming of course)
-        Iterator<BohnenspielMove> movesIterator = moves.iterator();
 
         Decision returnMove;
         Decision bestMove = null;
 
         //if you are trying to get the maximum value...
         if (isMax) {
-            while (movesIterator.hasNext()) {
-
-                //grab the current move for analysis
-                BohnenspielMove currentMove = movesIterator.next();
+            for (BohnenspielMove currentMove : moves) {
 
                 //inspect the outcome of each legal move
                 BohnenspielBoardState cloned_board_state = (BohnenspielBoardState) boardState.clone();
 
-                //inspect the outcome of the move
+                //check to make sure it is not an infinite move
                 if(!cloned_board_state.move(currentMove)) continue;
 
                 //you have won by default
@@ -114,10 +133,6 @@ public class StudentPlayer extends BohnenspielPlayer {
                 //recursive call to continue DFS from opponent's perspective
                 returnMove = minMax(cloned_board_state, alpha, beta, maxDepth - 1, false);
 
-                if(maxDepth == 15){
-                    System.out.println("return score: " + returnMove.returnValue);
-                }
-
                 if ((bestMove == null) || (bestMove.returnValue < returnMove.returnValue)) {
                     bestMove = returnMove;
                     bestMove.returnMove = currentMove;
@@ -125,25 +140,33 @@ public class StudentPlayer extends BohnenspielPlayer {
                 if (returnMove.returnValue > alpha) {
                     alpha = returnMove.returnValue;
                     bestMove = returnMove;
-                    bestMove.returnMove = currentMove;
                 }
                 if (beta <= alpha) {
-                    return bestMove; // pruning
+                    return bestMove;
                 }
             }
 
             return bestMove;
 
         } else {
-            while (movesIterator.hasNext()) {
-
-                BohnenspielMove currentMove = movesIterator.next();
+            for(BohnenspielMove currentMove : moves) {
 
                 //inspect the outcome of each legal move
                 BohnenspielBoardState cloned_board_state = (BohnenspielBoardState) boardState.clone();
 
                 //inspect the outcome of the move
                 cloned_board_state.move(currentMove);
+
+                //you have won by default
+                if(boardState.getScore(player_id) > 36){
+                    return new Decision(Integer.MAX_VALUE, currentMove);
+                }
+
+                //the other player wins by default
+                if(boardState.getScore(opponent_id) > 36){
+                    return new Decision(Integer.MIN_VALUE, currentMove);
+                }
+
                 returnMove = minMax(cloned_board_state, alpha, beta, maxDepth - 1, true);
 
                 if ((bestMove == null) || (bestMove.returnValue > returnMove.returnValue)) {
@@ -155,9 +178,7 @@ public class StudentPlayer extends BohnenspielPlayer {
                     bestMove = returnMove;
                 }
                 if (beta <= alpha) {
-//                    bestMove.returnValue = alpha;
-//                    bestMove.returnMove = null;
-                    return bestMove; // pruning
+                    return bestMove;
                 }
             }
             return bestMove;
@@ -166,26 +187,42 @@ public class StudentPlayer extends BohnenspielPlayer {
 
     private double evaluateBoard(BohnenspielBoardState boardState, BohnenspielPlayer me){
 
-        // Get the contents of the pits so we can use it to make decisions.
-        int[][] pits = boardState.getPits();
+        int winner = boardState.getWinner();
 
-        // Use ``player_id`` and ``opponent_id`` to get my pits and opponent pits.
-        int[] my_pits = pits[player_id];
+        if (winner == BohnenspielBoardState.NOBODY) {
 
-        double my_score = boardState.getScore(player_id);
-        double op_score = boardState.getScore(opponent_id);
+            // Get the contents of the pits so we can use it to make decisions.
+            int[][] pits = boardState.getPits();
 
-        //ideally you want to make moves that increases your score at faster rate than your opponents
-        double score_factor = my_score - op_score;
+            // Use ``player_id`` and ``opponent_id`` to get my pits and opponent pits.
+            int[] my_pits = pits[player_id];
 
-        double my_seeds = 0;
-        for(int i : my_pits){
-            my_seeds += i;
+            double my_score = boardState.getScore(player_id);
+            double op_score = boardState.getScore(opponent_id);
+
+            //ideally you want to make moves that increases your score at faster rate than your opponents
+            double score_factor = my_score - op_score;
+
+            double my_seeds = 0;
+            for(int i : my_pits){
+                my_seeds += i;
+            }
+
+            return 1 * score_factor + 1 * my_seeds;
+
+        }
+        else if (winner == player_id) {
+            return Integer.MAX_VALUE;
+        }
+        else if (winner == opponent_id) {
+            return Integer.MIN_VALUE;
         }
 
-        return 1 * score_factor + 1 * my_seeds;
-
+        return 0;
     }
+
+
+
 }
 
 
